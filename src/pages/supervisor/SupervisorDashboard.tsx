@@ -26,10 +26,11 @@ interface Application {
   crop_type: string;
   district_id: string;
   district_name: string;
-  requested_amount: number;
-  status: string;
+  requested_amount: number | null;
+  predicted_amount_mwk?: number | null;
   application_date: string;
-  farm_size_hectares: number;
+  farm_size_hectares: number | null;
+  status: string;
 }
 
 const SupervisorDashboard = () => {
@@ -61,8 +62,6 @@ const SupervisorDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       const data = await supervisorsService.getSupervisorDashboard();
-      console.log("Supervisor Dashboard Raw Response:", data);
-
       setStats({
         total_applications: Number(data?.total_applications ?? 0),
         approved_applications: Number(data?.approved_applications ?? 0),
@@ -87,17 +86,25 @@ const SupervisorDashboard = () => {
 
   const fetchPendingApplications = async () => {
     try {
-      const data = await supervisorsService.getPendingApplications();
-      console.log("Pending Applications Raw Response:", data);
+      const data: any[] = await supervisorsService.getPendingApplications();
 
-      const filtered = Array.isArray(data)
-        ? data.filter((app) => app.district_id === user?.district_id)
-        : [];
+      // Filter by user district if exists
+      const filtered = user?.district_id
+        ? data.filter((app) => String(app.district_id) === String(user.district_id))
+        : data;
 
-      const processed = filtered.map((app) => ({
+      // Process raw data to ensure correct types and fallback values
+      const processed: Application[] = filtered.map((app) => ({
         ...app,
-        requested_amount: Number(app.requested_amount ?? 0),
-        farm_size_hectares: Number(app.farm_size_hectares ?? 0),
+        requested_amount:
+          app.requested_amount != null
+            ? Number(app.requested_amount)
+            : app.predicted_amount_mwk != null
+            ? Number(app.predicted_amount_mwk)
+            : 0,
+        farm_size_hectares: app.farm_size_hectares != null ? Number(app.farm_size_hectares) : 0,
+        predicted_amount_mwk: app.predicted_amount_mwk ?? null,
+        status: app.status || "pending",
       }));
 
       setApplications(processed);
@@ -117,7 +124,7 @@ const SupervisorDashboard = () => {
       if (!application) throw new Error("Application not found");
       await supervisorsService.approveRejectApplication(applicationId, {
         action: "approve",
-        approved_amount_mwk: application.requested_amount,
+        approved_amount_mwk: application.requested_amount ?? 0,
         override_prediction: false,
         override_reason: "",
         comments: "Approved by supervisor",
@@ -128,7 +135,6 @@ const SupervisorDashboard = () => {
       });
       await Promise.all([fetchDashboardData(), fetchPendingApplications()]);
     } catch (error: any) {
-      console.error("Failed to approve application:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to approve application",
@@ -152,7 +158,6 @@ const SupervisorDashboard = () => {
       });
       await Promise.all([fetchDashboardData(), fetchPendingApplications()]);
     } catch (error: any) {
-      console.error("Failed to reject application:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to reject application",
@@ -262,7 +267,7 @@ const SupervisorDashboard = () => {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium text-gray-900">{formatCurrency(application.requested_amount)}</p>
+                    <p className="font-medium text-gray-900">{formatCurrency(application.requested_amount ?? 0)}</p>
                     <Badge className={getStatusColor(application.status)}>{application.status}</Badge>
                   </div>
                 </div>
