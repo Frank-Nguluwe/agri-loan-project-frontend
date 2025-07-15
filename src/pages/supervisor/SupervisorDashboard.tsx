@@ -2,40 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, Clock, XCircle, TrendingUp, Users, FileText } from 'lucide-react';
-import { apiService } from '@/lib/api';
+import { CheckCircle, Clock, XCircle, TrendingUp, FileText } from 'lucide-react';
+import { supervisorsService, SupervisorDashboardResponse, PendingApplication } from '@/lib/api/supervisors';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-
-interface SupervisorStats {
-  total_applications: number;
-  approved_applications: number;
-  pending_applications: number;
-  rejected_applications: number;
-  total_amount_approved: number;
-  average_approval_amount: number;
-  approval_rate: number;
-  loan_officer_stats: any[];
-  monthly_trends: any;
-  district_summary: any;
-}
-
-interface Application {
-  application_id: string;
-  farmer_name: string;
-  crop_type: string;
-  district_name: string;
-  requested_amount: number;
-  status: string;
-  application_date: string;
-  farm_size_hectares: number;
-}
 
 const SupervisorDashboard = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [applications, setApplications] = useState<Application[]>([]);
-  const [stats, setStats] = useState<SupervisorStats>({
+  const [applications, setApplications] = useState<PendingApplication[]>([]);
+  const [stats, setStats] = useState<SupervisorDashboardResponse>({
     total_applications: 0,
     approved_applications: 0,
     pending_applications: 0,
@@ -59,21 +35,9 @@ const SupervisorDashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const data = await apiService.getSupervisorDashboard();
-      setStats({
-        total_applications: data?.total_applications || 0,
-        approved_applications: data?.approved_applications || 0,
-        pending_applications: data?.pending_applications || 0,
-        rejected_applications: data?.rejected_applications || 0,
-        total_amount_approved: Number(data?.total_amount_approved) || 0,
-        average_approval_amount: Number(data?.average_approval_amount) || 0,
-        approval_rate: Number(data?.approval_rate) || 0,
-        loan_officer_stats: data?.loan_officer_stats || [],
-        monthly_trends: data?.monthly_trends || {},
-        district_summary: data?.district_summary || {},
-      });
-    } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
+      const data = await supervisorsService.getSupervisorDashboard();
+      setStats(data);
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to load dashboard data',
@@ -84,15 +48,12 @@ const SupervisorDashboard = () => {
 
   const fetchPendingApplications = async () => {
     try {
-      const data = await apiService.getPendingApplications();
-      const processedApplications = data?.map((app: any) => ({
-        ...app,
-        requested_amount: Number(app.requested_amount) || 0,
-        farm_size_hectares: Number(app.farm_size_hectares) || 0,
-      })) || [];
-      setApplications(processedApplications);
-    } catch (error) {
-      console.error('Failed to fetch applications:', error);
+      const data = await supervisorsService.getPendingApplications();
+      const filtered = user?.district_id
+        ? data.filter(app => app.district_id === user.district_id)
+        : data;
+      setApplications(filtered);
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to load applications',
@@ -105,23 +66,19 @@ const SupervisorDashboard = () => {
     try {
       const application = applications.find(app => app.application_id === applicationId);
       if (!application) throw new Error('Application not found');
-
-      await apiService.approveRejectApplication(applicationId, {
+      await supervisorsService.approveRejectApplication(applicationId, {
         action: 'approve',
         approved_amount_mwk: application.requested_amount,
         override_prediction: false,
         override_reason: '',
         comments: 'Approved by supervisor',
       });
-
       toast({
         title: 'Success',
-        description: `Loan of ${formatCurrency(application.requested_amount)} approved successfully`,
+        description: 'Application approved successfully',
       });
-
       await Promise.all([fetchDashboardData(), fetchPendingApplications()]);
     } catch (error: any) {
-      console.error('Failed to approve application:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to approve application',
@@ -132,22 +89,19 @@ const SupervisorDashboard = () => {
 
   const handleRejectApplication = async (applicationId: string) => {
     try {
-      await apiService.approveRejectApplication(applicationId, {
+      await supervisorsService.approveRejectApplication(applicationId, {
         action: 'reject',
         approved_amount_mwk: 0,
         override_prediction: false,
         override_reason: '',
         comments: 'Rejected by supervisor',
       });
-
       toast({
         title: 'Success',
         description: 'Application rejected successfully',
       });
-
       await Promise.all([fetchDashboardData(), fetchPendingApplications()]);
     } catch (error: any) {
-      console.error('Failed to reject application:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to reject application',
@@ -170,18 +124,10 @@ const SupervisorDashboard = () => {
   };
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'MWK',
-      minimumFractionDigits: 0,
-    }).format(amount);
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'MWK', minimumFractionDigits: 0 }).format(amount);
 
   const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 
   if (loading) {
     return (
@@ -200,7 +146,6 @@ const SupervisorDashboard = () => {
 
   return (
     <div className="space-y-6">
-      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {[
           { label: 'Total Applications', icon: <TrendingUp className="h-6 w-6 text-blue-600" />, value: stats.total_applications },
@@ -219,26 +164,6 @@ const SupervisorDashboard = () => {
           </GlassCard>
         ))}
       </div>
-
-      {/* Additional stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {[
-          { label: 'Total Amount Approved', value: formatCurrency(stats.total_amount_approved), color: '#2ACB25' },
-          { label: 'Average Approval Amount', value: formatCurrency(stats.average_approval_amount), color: '#2563EB' },
-          { label: 'Approval Rate', value: `${Math.round(stats.approval_rate * 100)}%`, color: '#7C3AED' },
-        ].map((stat, idx) => (
-          <GlassCard key={idx} className="p-6">
-            <div className="text-center">
-              <p className="text-sm text-gray-600 mb-2">{stat.label}</p>
-              <p className="text-3xl font-bold" style={{ color: stat.color }}>
-                {stat.value}
-              </p>
-            </div>
-          </GlassCard>
-        ))}
-      </div>
-
-      {/* Pending Applications */}
       <GlassCard className="p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">
           Pending Applications - {user?.district?.name || 'All Districts'}
@@ -250,7 +175,7 @@ const SupervisorDashboard = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {applications.map((application) => (
+            {applications.map(application => (
               <div key={application.application_id} className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div>
@@ -285,34 +210,6 @@ const SupervisorDashboard = () => {
                       Approve
                     </Button>
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </GlassCard>
-
-      {/* Loan Officer Performance */}
-      <GlassCard className="p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">Loan Officer Performance</h2>
-        {stats.loan_officer_stats.length === 0 ? (
-          <div className="text-center py-8">
-            <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">No loan officer data available</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {stats.loan_officer_stats.map((officer, index) => (
-              <div key={index} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                <div>
-                  <h3 className="font-medium text-gray-900">{officer.name}</h3>
-                  <p className="text-sm text-gray-600">{officer.district_name}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-medium text-gray-900">
-                    {officer.approved_applications}/{officer.total_applications}
-                  </p>
-                  <p className="text-sm text-gray-600">Approved/Total</p>
                 </div>
               </div>
             ))}
