@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,8 +9,8 @@ interface User {
   email: string;
   first_name: string;
   last_name: string;
-  role: string;
-  status: string;
+  role?: string; // made optional
+  status?: string; // made optional
   created_at: string;
   district_id?: string;
 }
@@ -27,12 +26,12 @@ export const UserManagementTable: React.FC<UserManagementTableProps> = ({
   onUsersChange,
   selectedDistrict
 }) => {
-  const filteredUsers = selectedDistrict 
+  const filteredUsers = selectedDistrict
     ? users.filter(user => user.district_id === selectedDistrict)
     : users;
 
-  const getRoleColor = (role: string) => {
-    switch (role.toLowerCase()) {
+  const getRoleColor = (role?: string) => {
+    switch (role?.toLowerCase()) {
       case 'admin':
         return 'bg-red-100 text-red-800';
       case 'supervisor':
@@ -46,8 +45,8 @@ export const UserManagementTable: React.FC<UserManagementTableProps> = ({
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
+  const getStatusColor = (status?: string) => {
+    switch (status?.toLowerCase()) {
       case 'active':
         return 'bg-green-100 text-green-800';
       case 'inactive':
@@ -96,12 +95,12 @@ export const UserManagementTable: React.FC<UserManagementTableProps> = ({
                   <td className="py-3 px-4 text-gray-600">{user.email}</td>
                   <td className="py-3 px-4">
                     <Badge className={getRoleColor(user.role)}>
-                      {user.role.replace('_', ' ')}
+                      {(user.role?.replace('_', ' ') || 'Unknown')}
                     </Badge>
                   </td>
                   <td className="py-3 px-4">
                     <Badge className={getStatusColor(user.status)}>
-                      {user.status}
+                      {user.status || 'Unknown'}
                     </Badge>
                   </td>
                   <td className="py-3 px-4 text-gray-600">
