@@ -56,12 +56,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     checkAuthStatus();
   }, []);
 
+  const clearAuthData = () => {
+    localStorage.removeItem('access_token');
+    setUser(null);
+  };
+
   const checkAuthStatus = async () => {
     setLoading(true);
     const token = localStorage.getItem('access_token');
 
     if (!token) {
-      setUser(null);
+      clearAuthData();
       setLoading(false);
       return;
     }
@@ -74,18 +79,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         phone_number: userData.phone_number || '',
       });
     } catch (error) {
-      apiService.logout();
-      setUser(null);
-      navigate('/auth/login');
+      clearAuthData();
+      navigate('/auth/login', { replace: true });
     } finally {
       setLoading(false);
     }
   };
 
   const login = async (credentials: LoginCredentials) => {
-    setUser(null);
-    await apiService.login(credentials);
-    await checkAuthStatus();
+    setLoading(true);
+    clearAuthData();
+    try {
+      await apiService.login(credentials);
+      await checkAuthStatus();
+    } finally {
+      setLoading(false);
+    }
   };
 
   const signup = async (userData: any) => {
@@ -95,8 +104,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = () => {
     apiService.logout();
-    setUser(null);
-    navigate('/auth/login');
+    clearAuthData();
+    navigate('/auth/login', { replace: true });
   };
 
   const hasRole = (role: string | string[]) =>
