@@ -7,7 +7,7 @@ interface District {
   region?: string;
 }
 
-interface User {
+export interface User {
   id: string;
   email: string;
   first_name: string;
@@ -19,16 +19,22 @@ interface User {
   farmer_profile?: any;
 }
 
+interface LoginCredentials {
+  email?: string;
+  phone_number?: string;
+  password: string;
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (credentials: any) => Promise<void>;
+  login: (credentials: LoginCredentials) => Promise<void>;
   signup: (userData: any) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
   hasRole: (role: string | string[]) => boolean;
   isAdmin: () => boolean;
-  getDistrictId: () => string | null;  // New helper method
+  getDistrictId: () => string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -46,7 +52,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const userData = await apiService.getDashboardInfo();
       setUser({
         ...userData,
-        district_id: userData.district_id || userData.district?.id || '' 
+        district_id: userData.district_id || userData.district?.id || '',
+        phone_number: userData.phone_number || ''
       });
     } catch (error) {
       console.error('Auth invalid or expired:', error);
@@ -57,13 +64,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const login = async (credentials: any) => {
+  const login = async (credentials: LoginCredentials) => {
     try {
+      // Validate that either email or phone_number is provided
+      if (!credentials.email && !credentials.phone_number) {
+        throw new Error('Either email or phone number must be provided');
+      }
+
       await apiService.login(credentials);
       const userData = await apiService.getDashboardInfo();
       setUser({
         ...userData,
-        district_id: userData.district_id || '', 
+        district_id: userData.district_id || '',
         phone_number: userData.phone_number || ''
       });
     } catch (error) {

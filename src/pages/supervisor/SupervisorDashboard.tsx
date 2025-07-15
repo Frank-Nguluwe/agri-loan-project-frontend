@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, Clock, XCircle, TrendingUp, Users, MapPin, FileText } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, TrendingUp, Users, FileText } from 'lucide-react';
 import { apiService } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -57,7 +56,7 @@ const SupervisorDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       const data = await apiService.getSupervisorDashboard();
-      setStats((data as SupervisorStats) || {
+      setStats(data || {
         total_applications: 0,
         approved_applications: 0,
         pending_applications: 0,
@@ -82,7 +81,7 @@ const SupervisorDashboard = () => {
   const fetchPendingApplications = async () => {
     try {
       const data = await apiService.getPendingApplications();
-      setApplications((data as Application[]) || []);
+      setApplications(data || []);
     } catch (error) {
       console.error('Failed to fetch applications:', error);
       toast({
@@ -272,7 +271,9 @@ const SupervisorDashboard = () => {
 
       {/* Pending Applications for Review */}
       <GlassCard className="p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">Pending Applications - {user?.district || 'All Districts'}</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-6">
+          Pending Applications - {user?.district?.name || 'All Districts'}
+        </h2>
         {applications.length === 0 ? (
           <div className="text-center py-8">
             <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />

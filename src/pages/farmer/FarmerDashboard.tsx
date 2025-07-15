@@ -204,7 +204,6 @@ const FarmerDashboard = () => {
               <Plus className="h-4 w-4 mr-2" />
               New Loan Application
             </Button>
-            <LoanPredictionModal />
             <Button
               variant="outline"
               onClick={() => setActiveTab('profile')}
