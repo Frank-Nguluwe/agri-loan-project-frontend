@@ -1,4 +1,3 @@
-// src/services/base.ts
 import { toast } from '@/hooks/use-toast';
 
 export class ApiError extends Error {
@@ -43,16 +42,29 @@ export class BaseApiService {
         credentials: 'include',
       });
 
+      if (response.status === 401) {
+        this.clearToken();
+
+        toast({
+          title: 'Session Expired',
+          description: 'Please log in again.',
+          variant: 'destructive',
+        });
+
+        // IMPORTANT: Do NOT reload the page here!
+        throw new ApiError(401, 'Not authenticated');
+      }
+
       if (!response.ok) {
         const errorData = await this.parseError(response);
         console.error('[API Error]', response.status, errorData);
-        
+
         toast({
           title: `API Error (${response.status})`,
           description: errorData.message || response.statusText,
-          variant: "destructive",
+          variant: 'destructive',
         });
-        
+
         throw new ApiError(
           response.status,
           errorData.message || response.statusText,
@@ -67,13 +79,13 @@ export class BaseApiService {
       }
 
       console.error('[Network Error]', error);
-      
+
       toast({
-        title: "Network Error",
-        description: "Failed to connect to the server. Please check your connection.",
-        variant: "destructive",
+        title: 'Network Error',
+        description: 'Failed to connect to the server. Please check your connection.',
+        variant: 'destructive',
       });
-      
+
       throw new ApiError(
         0,
         'Network request failed',
@@ -103,7 +115,8 @@ export class BaseApiService {
     localStorage.setItem('access_token', token);
   }
 
-  protected getToken(): string | null {
+  // Changed to public so it can be accessed externally
+  public getToken(): string | null {
     if (this.token) return this.token;
     const token = localStorage.getItem('access_token');
     this.token = token;

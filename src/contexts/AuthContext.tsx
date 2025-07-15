@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiService } from '@/lib/api';
 
 interface District {
@@ -12,7 +13,7 @@ export interface User {
   email: string;
   first_name: string;
   last_name: string;
-  phone_number: string;  
+  phone_number: string;
   role: 'farmer' | 'loan_officer' | 'supervisor' | 'admin';
   district_id: string;
   district?: District;
@@ -42,12 +43,23 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     checkAuthStatus();
   }, []);
 
   const checkAuthStatus = async () => {
+    setLoading(true);
+
+    // Read token directly from localStorage to avoid TS error
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       const userData = await apiService.getDashboardInfo();
       setUser({
@@ -56,9 +68,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         phone_number: userData.phone_number || ''
       });
     } catch (error) {
-      console.error('Auth invalid or expired:', error);
+      console.warn('Auth expired or invalid:', error);
       apiService.logout();
       setUser(null);
+      navigate('/auth/login');
     } finally {
       setLoading(false);
     }
@@ -66,18 +79,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (credentials: LoginCredentials) => {
     try {
-      // Validate that either email or phone_number is provided
       if (!credentials.email && !credentials.phone_number) {
         throw new Error('Either email or phone number must be provided');
       }
 
       await apiService.login(credentials);
-      const userData = await apiService.getDashboardInfo();
-      setUser({
-        ...userData,
-        district_id: userData.district_id || '',
-        phone_number: userData.phone_number || ''
-      });
+      await checkAuthStatus(); // Always re-fetch user after login
     } catch (error) {
       console.error('Login failed:', error);
       throw error;
@@ -86,12 +93,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signup = async (userData: any) => {
     try {
-      const response = await apiService.signup(userData);
+      await apiService.signup(userData);
       await login({
         email: userData.email,
         password: userData.password
       });
-      return response;
     } catch (error) {
       console.error('Signup failed:', error);
       throw error;
@@ -101,6 +107,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const logout = () => {
     apiService.logout();
     setUser(null);
+    navigate('/auth/login');
   };
 
   const hasRole = (role: string | string[]) => {
@@ -125,7 +132,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isAuthenticated: !!user,
         hasRole,
         isAdmin,
-        getDistrictId
+        getDistrictId,
       }}
     >
       {children}

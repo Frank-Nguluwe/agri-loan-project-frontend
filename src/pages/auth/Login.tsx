@@ -53,12 +53,11 @@ const Login = () => {
     }
   };
 
-  // Redirect on user update
   useEffect(() => {
     if (user?.role) {
       redirectByRole(user.role);
     }
-  }, [user]);
+  }, [user?.role]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
