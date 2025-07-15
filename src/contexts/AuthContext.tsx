@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+// src/contexts/AuthContext.tsx
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '@/lib/api';
 
@@ -51,9 +58,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const checkAuthStatus = async () => {
     setLoading(true);
-
-    // Read token directly from localStorage to avoid TS error
     const token = localStorage.getItem('access_token');
+
     if (!token) {
       setUser(null);
       setLoading(false);
@@ -65,10 +71,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUser({
         ...userData,
         district_id: userData.district_id || userData.district?.id || '',
-        phone_number: userData.phone_number || ''
+        phone_number: userData.phone_number || '',
       });
     } catch (error) {
-      console.warn('Auth expired or invalid:', error);
       apiService.logout();
       setUser(null);
       navigate('/auth/login');
@@ -78,30 +83,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const login = async (credentials: LoginCredentials) => {
-    try {
-      if (!credentials.email && !credentials.phone_number) {
-        throw new Error('Either email or phone number must be provided');
-      }
-
-      await apiService.login(credentials);
-      await checkAuthStatus(); // Always re-fetch user after login
-    } catch (error) {
-      console.error('Login failed:', error);
-      throw error;
-    }
+    setUser(null);
+    await apiService.login(credentials);
+    await checkAuthStatus();
   };
 
   const signup = async (userData: any) => {
-    try {
-      await apiService.signup(userData);
-      await login({
-        email: userData.email,
-        password: userData.password
-      });
-    } catch (error) {
-      console.error('Signup failed:', error);
-      throw error;
-    }
+    await apiService.signup(userData);
+    await login({ email: userData.email, password: userData.password });
   };
 
   const logout = () => {
@@ -110,16 +99,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     navigate('/auth/login');
   };
 
-  const hasRole = (role: string | string[]) => {
-    if (!user) return false;
-    return Array.isArray(role) ? role.includes(user.role) : user.role === role;
-  };
+  const hasRole = (role: string | string[]) =>
+    user ? (Array.isArray(role) ? role.includes(user.role) : user.role === role) : false;
 
   const isAdmin = () => hasRole('admin');
 
-  const getDistrictId = () => {
-    return user?.district_id || null;
-  };
+  const getDistrictId = () => user?.district_id || null;
 
   return (
     <AuthContext.Provider

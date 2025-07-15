@@ -1,4 +1,3 @@
-
 import { BaseApiService } from './base';
 
 interface District {
@@ -49,8 +48,9 @@ class PredictionsService extends BaseApiService {
     });
   }
 
+  // UPDATED to correct API path:
   async getPendingPredictionApplications() {
-    return this.makeRequest('/predictions/pending-applications');
+    return this.makeRequest('/supervisors/applications/pending');
   }
 
   async processPendingBatch() {

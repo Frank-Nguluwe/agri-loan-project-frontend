@@ -9,8 +9,8 @@ interface User {
   email: string;
   first_name: string;
   last_name: string;
-  role?: string; // made optional
-  status?: string; // made optional
+  role?: string;
+  status?: string;
   created_at: string;
   district_id?: string;
 }
@@ -74,19 +74,12 @@ export const UserManagementTable: React.FC<UserManagementTableProps> = ({
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 font-medium text-gray-900">Name</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-900">Email</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-900">Role</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-900">Status</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-900">Created</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-900">Actions</th>
-              </tr>
-            </thead>
             <tbody>
-              {filteredUsers.map((user) => (
-                <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
+              {filteredUsers.map((user, index) => (
+                <tr
+                  key={user.id || user.email || index}
+                  className="border-b border-gray-100 hover:bg-gray-50"
+                >
                   <td className="py-3 px-4">
                     <div className="font-medium text-gray-900">
                       {user.first_name} {user.last_name}
@@ -95,7 +88,7 @@ export const UserManagementTable: React.FC<UserManagementTableProps> = ({
                   <td className="py-3 px-4 text-gray-600">{user.email}</td>
                   <td className="py-3 px-4">
                     <Badge className={getRoleColor(user.role)}>
-                      {(user.role?.replace('_', ' ') || 'Unknown')}
+                      {user.role?.replace('_', ' ') || 'Unknown'}
                     </Badge>
                   </td>
                   <td className="py-3 px-4">

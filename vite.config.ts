@@ -3,10 +3,13 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 
 export default defineConfig({
-  root: './', 
+  root: "./",
   server: {
     host: "::",
     port: 5173,
+    fs: {
+      allow: ["."],
+    },
   },
   plugins: [react()],
   resolve: {
@@ -15,7 +18,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'dist', 
+    outDir: "dist",
     emptyOutDir: true,
-  }
+  },
 });

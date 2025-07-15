@@ -1,7 +1,7 @@
-
+// src/services/users.ts
 import { BaseApiService } from './base';
 
-class UsersService extends BaseApiService {
+export class UsersService extends BaseApiService {
   async updateProfile(profileData: any) {
     return this.makeRequest('/users/update-profile', {
       method: 'PUT',

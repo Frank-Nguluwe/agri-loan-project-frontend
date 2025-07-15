@@ -1,12 +1,13 @@
+// src/services/auth.ts
 import { BaseApiService } from './base';
 
-interface LoginCredentials {
+export interface LoginCredentials {
   email?: string;
   phone_number?: string;
   password: string;
 }
 
-interface SignupData {
+export interface SignupData {
   email: string;
   phone_number: string;
   first_name: string;
@@ -18,40 +19,12 @@ interface SignupData {
   address?: string;
 }
 
-interface DistrictResponse {
-  id: string;
-  name: string;
-}
-
-interface FarmerProfileResponse {
-  user_id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone_number: string;
-  district: {
-    id: string;
-    name: string;
-  };
-  created_at: string;
-  is_active: boolean;
-  role: string;
-}
-
-interface UpdateFarmerProfileData {
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone_number: string;
-}
-
-class AuthService extends BaseApiService {
+export class AuthService extends BaseApiService {
   async login(credentials: LoginCredentials) {
-    const response = await this.makeRequest<{ access_token: string; token_type: string }>('/auth/login', {
+    const response = await this.makeRequest<{ access_token: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
-
     this.setToken(response.access_token);
     return response;
   }
@@ -59,31 +32,16 @@ class AuthService extends BaseApiService {
   async signup(data: SignupData) {
     return this.makeRequest('/auth/signup', {
       method: 'POST',
-      body: JSON.stringify({
-        ...data,
-        national_id: data.national_id || undefined,
-        address: data.address || undefined
-      }),
-    });
-  }
-
-  async getFarmerProfile(): Promise<FarmerProfileResponse> {
-    return this.makeRequest<FarmerProfileResponse>('/farmers/profile', {
-      method: 'GET',
-    });
-  }
-
-  async updateFarmerProfile(data: UpdateFarmerProfileData) {
-    return this.makeRequest('/farmers/profile', {
-      method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
-  async getDistrictById(id: string): Promise<DistrictResponse> {
-    return this.makeRequest<DistrictResponse>(`/districts/${id}`, {
-      method: 'GET',
-    });
+  async getDashboardInfo() {
+    return this.makeRequest('/auth/me', { method: 'GET' });
+  }
+
+  logout() {
+    this.clearToken();
   }
 
   async resetPassword(identifier: string) {
@@ -99,23 +57,6 @@ class AuthService extends BaseApiService {
       body: JSON.stringify({ otp, new_password: newPassword }),
     });
   }
-
-  logout() {
-    this.clearToken();
-  }
-
-  async getDashboardInfo() {
-    return this.makeRequest('/auth/me', {
-      method: 'GET',
-    });
-  }
 }
 
 export const authService = new AuthService();
-export type { 
-  LoginCredentials, 
-  SignupData, 
-  FarmerProfileResponse as FarmerProfile,
-  DistrictResponse,
-  UpdateFarmerProfileData
-};

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
@@ -8,9 +7,13 @@ import { SystemSettingsModal } from '@/components/admin/SystemSettingsModal';
 import { ModelPerformanceModal } from '@/components/admin/ModelPerformanceModal';
 import { ModelManagementModal } from '@/components/admin/ModelManagementModal';
 import { DistrictSelect } from '@/components/ui/district-select';
-import { Users, Settings, TrendingUp, Activity, Database, MapPin } from 'lucide-react';
+import { Users, TrendingUp, Activity, Database, MapPin } from 'lucide-react';
 import apiService from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
+
+const getCurrentUserRole = () => {
+  return localStorage.getItem('userRole') || 'admin';
+};
 
 interface ModelPerformance {
   accuracy: number;
@@ -20,7 +23,7 @@ interface ModelPerformance {
 
 const AdminDashboard = () => {
   console.log('AdminDashboard - Component rendering');
-  
+
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<any[]>([]);
   const [modelPerformance, setModelPerformance] = useState<ModelPerformance>({
@@ -31,6 +34,8 @@ const AdminDashboard = () => {
   const [selectedDistrict, setSelectedDistrict] = useState<string>('');
   const [pendingApplications, setPendingApplications] = useState<any[]>([]);
 
+  const userRole = getCurrentUserRole();
+
   useEffect(() => {
     console.log('AdminDashboard - useEffect triggered, fetching data');
     fetchDashboardData();
@@ -39,36 +44,51 @@ const AdminDashboard = () => {
   const fetchDashboardData = async () => {
     console.log('AdminDashboard - fetchDashboardData started');
     try {
-      const [usersData, performanceData, pendingData] = await Promise.all([
-        apiService.getUsers().catch(err => {
-          console.error('Failed to fetch users:', err);
-          return [];
-        }),
-        apiService.getModelPerformance().catch(err => {
-          console.error('Failed to fetch model performance:', err);
-          return { accuracy: 0, recent_predictions: [], drift_metrics: {} };
-        }),
-        apiService.getPendingPredictionApplications().catch(err => {
-          console.error('Failed to fetch pending applications:', err);
-          return [];
-        }),
-      ]);
-      
-      console.log('AdminDashboard - Data fetched:', { usersData, performanceData, pendingData });
-      
-      setUsers(Array.isArray(usersData) ? usersData : []);
-      setModelPerformance(performanceData as ModelPerformance || {
-        accuracy: 0,
-        recent_predictions: [],
-        drift_metrics: {},
+      const usersPromise = apiService.getUsers().catch(err => {
+        console.error('Failed to fetch users:', err);
+        return [];
       });
+
+      const performancePromise = apiService.getModelPerformance().catch(err => {
+        console.error('Failed to fetch model performance:', err);
+        return { accuracy: 0, recent_predictions: [], drift_metrics: {} };
+      });
+
+      const pendingPromise =
+        userRole === 'supervisor'
+          ? apiService.getPendingPredictionApplications().catch(err => {
+              console.error('Failed to fetch pending applications:', err);
+              return [];
+            })
+          : Promise.resolve([]); 
+
+      const [usersData, performanceData, pendingData] = await Promise.all([
+        usersPromise,
+        performancePromise,
+        pendingPromise,
+      ]);
+
+      console.log('AdminDashboard - Data fetched:', {
+        usersData,
+        performanceData,
+        pendingData,
+      });
+
+      setUsers(Array.isArray(usersData) ? usersData : []);
+      setModelPerformance(
+        (performanceData as ModelPerformance) || {
+          accuracy: 0,
+          recent_predictions: [],
+          drift_metrics: {},
+        }
+      );
       setPendingApplications(Array.isArray(pendingData) ? pendingData : []);
     } catch (error) {
       console.error('AdminDashboard - Failed to fetch dashboard data:', error);
       toast({
-        title: "Error",
-        description: "Failed to load dashboard data",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to load dashboard data',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
@@ -81,23 +101,26 @@ const AdminDashboard = () => {
       setLoading(true);
       await apiService.processPendingBatch();
       toast({
-        title: "Success",
-        description: "Pending applications processed successfully",
+        title: 'Success',
+        description: 'Pending applications processed successfully',
       });
       fetchDashboardData();
     } catch (error) {
       console.error('Failed to process pending batch:', error);
       toast({
-        title: "Error",
-        description: "Failed to process pending applications",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to process pending applications',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
   };
 
-  console.log('AdminDashboard - Render state:', { loading, usersCount: users.length });
+  console.log('AdminDashboard - Render state:', {
+    loading,
+    usersCount: users.length,
+  });
 
   if (loading) {
     return (
@@ -185,7 +208,9 @@ const AdminDashboard = () => {
             </div>
             <div>
               <p className="text-sm text-gray-600">Pending Applications</p>
-              <p className="text-2xl font-bold text-gray-900">{pendingApplications.length}</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {pendingApplications.length}
+              </p>
             </div>
           </div>
         </GlassCard>
@@ -197,8 +222,9 @@ const AdminDashboard = () => {
         <SystemSettingsModal />
         <ModelPerformanceModal />
         <ModelManagementModal />
-        
-        {pendingApplications.length > 0 && (
+
+        {/* Only show Process Pending if supervisor and there are pending */}
+        {userRole === 'supervisor' && pendingApplications.length > 0 && (
           <Button
             onClick={handleProcessPendingBatch}
             disabled={loading}
@@ -211,7 +237,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* User Management Table */}
-      <UserManagementTable 
+      <UserManagementTable
         users={users}
         onUsersChange={fetchDashboardData}
         selectedDistrict={selectedDistrict}
