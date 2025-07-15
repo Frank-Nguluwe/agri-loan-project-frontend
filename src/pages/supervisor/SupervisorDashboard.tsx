@@ -49,31 +49,35 @@ const SupervisorDashboard = () => {
   });
 
   useEffect(() => {
-    fetchDashboardData();
-    fetchPendingApplications();
+    const loadAllData = async () => {
+      setLoading(true);
+      await Promise.all([fetchDashboardData(), fetchPendingApplications()]);
+      setLoading(false);
+    };
+    loadAllData();
   }, []);
 
   const fetchDashboardData = async () => {
     try {
       const data = await apiService.getSupervisorDashboard();
-      setStats(data || {
-        total_applications: 0,
-        approved_applications: 0,
-        pending_applications: 0,
-        rejected_applications: 0,
-        total_amount_approved: 0,
-        average_approval_amount: 0,
-        approval_rate: 0,
-        loan_officer_stats: [],
-        monthly_trends: {},
-        district_summary: {},
+      setStats({
+        total_applications: data?.total_applications || 0,
+        approved_applications: data?.approved_applications || 0,
+        pending_applications: data?.pending_applications || 0,
+        rejected_applications: data?.rejected_applications || 0,
+        total_amount_approved: Number(data?.total_amount_approved) || 0,
+        average_approval_amount: Number(data?.average_approval_amount) || 0,
+        approval_rate: Number(data?.approval_rate) || 0,
+        loan_officer_stats: data?.loan_officer_stats || [],
+        monthly_trends: data?.monthly_trends || {},
+        district_summary: data?.district_summary || {},
       });
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
       toast({
-        title: "Error",
-        description: "Failed to load dashboard data",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to load dashboard data',
+        variant: 'destructive',
       });
     }
   };
@@ -81,39 +85,47 @@ const SupervisorDashboard = () => {
   const fetchPendingApplications = async () => {
     try {
       const data = await apiService.getPendingApplications();
-      setApplications(data || []);
+      const processedApplications = data?.map((app: any) => ({
+        ...app,
+        requested_amount: Number(app.requested_amount) || 0,
+        farm_size_hectares: Number(app.farm_size_hectares) || 0,
+      })) || [];
+      setApplications(processedApplications);
     } catch (error) {
       console.error('Failed to fetch applications:', error);
       toast({
-        title: "Error",
-        description: "Failed to load applications",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to load applications',
+        variant: 'destructive',
       });
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleApproveApplication = async (applicationId: string) => {
     try {
+      const application = applications.find(app => app.application_id === applicationId);
+      if (!application) throw new Error('Application not found');
+
       await apiService.approveRejectApplication(applicationId, {
-        status: 'approved',
-        supervisor_notes: 'Approved by supervisor'
+        action: 'approve',
+        approved_amount_mwk: application.requested_amount,
+        override_prediction: false,
+        override_reason: '',
+        comments: 'Approved by supervisor',
       });
-      
+
       toast({
-        title: "Success",
-        description: "Application approved successfully",
+        title: 'Success',
+        description: `Loan of ${formatCurrency(application.requested_amount)} approved successfully`,
       });
-      
-      fetchPendingApplications();
-      fetchDashboardData();
-    } catch (error) {
+
+      await Promise.all([fetchDashboardData(), fetchPendingApplications()]);
+    } catch (error: any) {
       console.error('Failed to approve application:', error);
       toast({
-        title: "Error",
-        description: "Failed to approve application",
-        variant: "destructive",
+        title: 'Error',
+        description: error.message || 'Failed to approve application',
+        variant: 'destructive',
       });
     }
   };
@@ -121,23 +133,25 @@ const SupervisorDashboard = () => {
   const handleRejectApplication = async (applicationId: string) => {
     try {
       await apiService.approveRejectApplication(applicationId, {
-        status: 'rejected',
-        supervisor_notes: 'Rejected by supervisor'
+        action: 'reject',
+        approved_amount_mwk: 0,
+        override_prediction: false,
+        override_reason: '',
+        comments: 'Rejected by supervisor',
       });
-      
+
       toast({
-        title: "Success",
-        description: "Application rejected",
+        title: 'Success',
+        description: 'Application rejected successfully',
       });
-      
-      fetchPendingApplications();
-      fetchDashboardData();
-    } catch (error) {
+
+      await Promise.all([fetchDashboardData(), fetchPendingApplications()]);
+    } catch (error: any) {
       console.error('Failed to reject application:', error);
       toast({
-        title: "Error",
-        description: "Failed to reject application",
-        variant: "destructive",
+        title: 'Error',
+        description: error.message || 'Failed to reject application',
+        variant: 'destructive',
       });
     }
   };
@@ -155,21 +169,19 @@ const SupervisorDashboard = () => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'MWK',
       minimumFractionDigits: 0,
     }).format(amount);
-  };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
     });
-  };
 
   if (loading) {
     return (
@@ -188,88 +200,45 @@ const SupervisorDashboard = () => {
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
+      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <GlassCard className="p-6">
-          <div className="flex items-center">
-            <div className="bg-blue-100 rounded-full p-3 mr-4">
-              <TrendingUp className="h-6 w-6 text-blue-600" />
+        {[
+          { label: 'Total Applications', icon: <TrendingUp className="h-6 w-6 text-blue-600" />, value: stats.total_applications },
+          { label: 'Approved', icon: <CheckCircle className="h-6 w-6 text-green-600" />, value: stats.approved_applications },
+          { label: 'Pending', icon: <Clock className="h-6 w-6 text-yellow-600" />, value: stats.pending_applications },
+          { label: 'Rejected', icon: <XCircle className="h-6 w-6 text-red-600" />, value: stats.rejected_applications },
+        ].map((stat, idx) => (
+          <GlassCard key={idx} className="p-6">
+            <div className="flex items-center">
+              <div className="bg-gray-100 rounded-full p-3 mr-4">{stat.icon}</div>
+              <div>
+                <p className="text-sm text-gray-600">{stat.label}</p>
+                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-gray-600">Total Applications</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.total_applications}</p>
-            </div>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-6">
-          <div className="flex items-center">
-            <div className="bg-green-100 rounded-full p-3 mr-4">
-              <CheckCircle className="h-6 w-6 text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Approved</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.approved_applications}</p>
-            </div>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-6">
-          <div className="flex items-center">
-            <div className="bg-yellow-100 rounded-full p-3 mr-4">
-              <Clock className="h-6 w-6 text-yellow-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Pending</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.pending_applications}</p>
-            </div>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-6">
-          <div className="flex items-center">
-            <div className="bg-red-100 rounded-full p-3 mr-4">
-              <XCircle className="h-6 w-6 text-red-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Rejected</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.rejected_applications}</p>
-            </div>
-          </div>
-        </GlassCard>
+          </GlassCard>
+        ))}
       </div>
 
-      {/* Additional Stats */}
+      {/* Additional stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <GlassCard className="p-6">
-          <div className="text-center">
-            <p className="text-sm text-gray-600 mb-2">Total Amount Approved</p>
-            <p className="text-3xl font-bold text-[#2ACB25]">
-              {formatCurrency(stats.total_amount_approved)}
-            </p>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-6">
-          <div className="text-center">
-            <p className="text-sm text-gray-600 mb-2">Average Approval Amount</p>
-            <p className="text-3xl font-bold text-blue-600">
-              {formatCurrency(stats.average_approval_amount)}
-            </p>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-6">
-          <div className="text-center">
-            <p className="text-sm text-gray-600 mb-2">Approval Rate</p>
-            <p className="text-3xl font-bold text-purple-600">
-              {Math.round(stats.approval_rate * 100)}%
-            </p>
-          </div>
-        </GlassCard>
+        {[
+          { label: 'Total Amount Approved', value: formatCurrency(stats.total_amount_approved), color: '#2ACB25' },
+          { label: 'Average Approval Amount', value: formatCurrency(stats.average_approval_amount), color: '#2563EB' },
+          { label: 'Approval Rate', value: `${Math.round(stats.approval_rate * 100)}%`, color: '#7C3AED' },
+        ].map((stat, idx) => (
+          <GlassCard key={idx} className="p-6">
+            <div className="text-center">
+              <p className="text-sm text-gray-600 mb-2">{stat.label}</p>
+              <p className="text-3xl font-bold" style={{ color: stat.color }}>
+                {stat.value}
+              </p>
+            </div>
+          </GlassCard>
+        ))}
       </div>
 
-      {/* Pending Applications for Review */}
+      {/* Pending Applications */}
       <GlassCard className="p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">
           Pending Applications - {user?.district?.name || 'All Districts'}
@@ -292,12 +261,9 @@ const SupervisorDashboard = () => {
                   </div>
                   <div className="text-right">
                     <p className="font-medium text-gray-900">{formatCurrency(application.requested_amount)}</p>
-                    <Badge className={getStatusColor(application.status)}>
-                      {application.status}
-                    </Badge>
+                    <Badge className={getStatusColor(application.status)}>{application.status}</Badge>
                   </div>
                 </div>
-                
                 <div className="flex justify-between items-center">
                   <p className="text-sm text-gray-500">Applied on {formatDate(application.application_date)}</p>
                   <div className="flex space-x-2">
