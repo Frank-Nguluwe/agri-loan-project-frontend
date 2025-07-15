@@ -6,7 +6,6 @@ import React, {
   useEffect,
   ReactNode,
 } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { apiService } from '@/lib/api';
 
 interface District {
@@ -50,7 +49,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
 
   useEffect(() => {
     checkAuthStatus();
@@ -80,21 +78,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
     } catch (error) {
       clearAuthData();
-      navigate('/auth/login', { replace: true });
+      window.location.href = '/auth/login';
     } finally {
       setLoading(false);
     }
   };
 
   const login = async (credentials: LoginCredentials) => {
-    setLoading(true);
     clearAuthData();
-    try {
-      await apiService.login(credentials);
-      await checkAuthStatus();
-    } finally {
-      setLoading(false);
-    }
+    await apiService.login(credentials);
+    // Force full reload to reset all state
+    window.location.href = '/dashboard';
   };
 
   const signup = async (userData: any) => {
@@ -105,7 +99,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const logout = () => {
     apiService.logout();
     clearAuthData();
-    navigate('/auth/login', { replace: true });
+    // Force full reload to reset all state
+    window.location.href = '/auth/login';
   };
 
   const hasRole = (role: string | string[]) =>

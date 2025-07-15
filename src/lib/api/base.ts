@@ -115,7 +115,6 @@ export class BaseApiService {
     localStorage.setItem('access_token', token);
   }
 
-  // Changed to public so it can be accessed externally
   public getToken(): string | null {
     if (this.token) return this.token;
     const token = localStorage.getItem('access_token');
