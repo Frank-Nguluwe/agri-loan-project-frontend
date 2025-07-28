@@ -1,4 +1,3 @@
-// src/services/index.ts
 import { BaseApiService } from './base';
 import { toast } from '@/hooks/use-toast';
 
@@ -31,7 +30,7 @@ class ApiService {
   // Auth methods (kept for backward compatibility)
   login = authService.login.bind(authService);
   signup = authService.signup.bind(authService);
-  resetPassword = authService.resetPassword.bind(authService);
+  passwordReset = authService.passwordReset.bind(authService);
   verifyOtp = authService.verifyOtp.bind(authService);
   logout = authService.logout.bind(authService);
 
@@ -115,4 +114,4 @@ export default apiService;
 // Export types
 export type { PredictionRequest, PredictionResponse } from './predictions';
 export type { District as DistrictType } from './districts';
-export type { LoginCredentials, SignupData } from './auth';
+export type { LoginCredentials, SignupData, PasswordResetRequest, VerifyOtpData } from './auth';

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { authService, SignupData } from '@/lib/api/auth';
+import { districtsService, District } from '@/lib/api/districts';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,16 +16,47 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [districts, setDistricts] = useState<District[]>([]);
+  const [fetchingDistricts, setFetchingDistricts] = useState(true);
   
-  const [formData, setFormData] = useState<SignupData>({
+  // Define available roles based on SignupData type
+  const roles = [
+    { code: 'farmer', name: 'Farmer' },
+    { code: 'loan_officer', name: 'Loan Officer' },
+    { code: 'supervisor', name: 'Supervisor' },
+    { code: 'admin', name: 'Admin' }
+  ];
+
+  const [formData, setFormData] = useState<Omit<SignupData, 'district_id' | 'role'>>({
     email: '',
     phone_number: '',
     first_name: '',
     last_name: '',
     password: '',
-    role: 'farmer',
-    district_id: '880bc4ee-477a-4e12-a0f0-c89f020ba05d' // Default district ID as provided
   });
+
+  const [selectedDistrict, setSelectedDistrict] = useState<string>('');
+  const [selectedRole, setSelectedRole] = useState<string>('');
+
+  useEffect(() => {
+    const fetchDistricts = async () => {
+      try {
+        const districtsData = await districtsService.getAllDistricts();
+        setDistricts(districtsData);
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to fetch districts",
+          variant: "destructive",
+        });
+        console.error('Error fetching districts:', error);
+      } finally {
+        setFetchingDistricts(false);
+      }
+    };
+
+    fetchDistricts();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -34,34 +66,40 @@ const Signup = () => {
     setError('');
   };
 
-  const handleSelectChange = (field: keyof SignupData, value: string) => {
-    setFormData({
-      ...formData,
-      [field]: value
-    });
-    setError('');
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
+    // Validate required fields
+    if (!selectedDistrict || !selectedRole) {
+      setError('Please select both district and role');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const response = await authService.signup(formData);
+      // Combine all form data with selections
+      const signupPayload: SignupData = {
+        ...formData,
+        district_id: selectedDistrict,
+        role: selectedRole as SignupData['role'] // Type assertion since we know it's valid
+      };
+
+      await authService.signup(signupPayload);
       
       toast({
         title: "Account Created Successfully",
         description: "Please sign in with your new account",
       });
       
-      // Navigate to login page
       navigate('/auth/login');
     } catch (error: any) {
-      setError(error.message || 'Failed to create account. Please try again.');
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to create account';
+      setError(errorMessage);
       toast({
         title: "Signup Failed",
-        description: "Please check your information and try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -149,21 +187,43 @@ const Signup = () => {
               />
             </div>
 
-            {/* Role */}
+            {/* Role Selection */}
             <div>
               <Label htmlFor="role">Role</Label>
               <Select
-                value={formData.role}
-                onValueChange={(value) => handleSelectChange('role', value)}
+                value={selectedRole}
+                onValueChange={setSelectedRole}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="Select your role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="farmer">Farmer</SelectItem>
-                  <SelectItem value="loan_officer">Loan Officer</SelectItem>
-                  <SelectItem value="supervisor">Supervisor</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  {roles.map((role) => (
+                    <SelectItem key={role.code} value={role.code}>
+                      {role.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* District Selection */}
+            <div>
+              <Label htmlFor="district">District</Label>
+              <Select
+                value={selectedDistrict}
+                onValueChange={setSelectedDistrict}
+                disabled={fetchingDistricts}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder={fetchingDistricts ? "Loading districts..." : "Select your district"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {districts.map((district) => (
+                    <SelectItem key={district.id} value={district.id}>
+                      {district.name} {district.region ? `(${district.region})` : ''}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -195,6 +255,34 @@ const Signup = () => {
               </div>
             </div>
 
+            {/* Optional National ID */}
+            <div>
+              <Label htmlFor="national_id">National ID (Optional)</Label>
+              <Input
+                id="national_id"
+                name="national_id"
+                type="text"
+                value={formData.national_id || ''}
+                onChange={handleInputChange}
+                placeholder="Enter your national ID"
+                className="mt-1"
+              />
+            </div>
+
+            {/* Optional Address */}
+            <div>
+              <Label htmlFor="address">Address (Optional)</Label>
+              <Input
+                id="address"
+                name="address"
+                type="text"
+                value={formData.address || ''}
+                onChange={handleInputChange}
+                placeholder="Enter your address"
+                className="mt-1"
+              />
+            </div>
+
             {/* Error Alert */}
             {error && (
               <Alert variant="destructive">
@@ -206,7 +294,7 @@ const Signup = () => {
             <Button
               type="submit"
               className="w-full bg-[#2ACB25] hover:bg-[#1E9B1A] text-white"
-              disabled={loading}
+              disabled={loading || fetchingDistricts}
             >
               {loading ? 'Creating Account...' : 'Create Account'}
             </Button>

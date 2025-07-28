@@ -1,22 +1,27 @@
-
 import { BaseApiService } from './base';
 
-interface District {
+export interface District {
   id: string;
   name: string;
-  code: string;
-  region: string;
+  region?: string;
 }
 
-class DistrictsService extends BaseApiService {
-  async getAllDistricts(): Promise<District[]> {
-    return this.makeRequest('/districts/');
+export class DistrictsService extends BaseApiService {
+  constructor() {
+    super('/api');
   }
 
-  async getDistrictById(districtId: string): Promise<District> {
-    return this.makeRequest(`/districts/${districtId}`);
+  async getAllDistricts(): Promise<District[]> {
+    return this.makeRequest<District[]>('/districts', {
+      method: 'GET'
+    });
+  }
+
+  async getDistrictById(id: string): Promise<District> {
+    return this.makeRequest<District>(`/districts/${id}`, {
+      method: 'GET'
+    });
   }
 }
 
 export const districtsService = new DistrictsService();
-export type { District };

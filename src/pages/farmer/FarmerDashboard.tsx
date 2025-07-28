@@ -1,53 +1,77 @@
-
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { LoanPredictionModal } from '@/components/farmer/LoanPredictionModal';
 import { FarmerProfile } from '@/components/farmer/FarmerProfile';
 import { Plus, FileText, User, TrendingUp, Calendar } from 'lucide-react';
-import { apiService } from '@/lib/api';
+import { farmersService } from '@/lib/api/farmers';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Application {
   application_id: string;
   application_date: string;
-  status: string;
+  status: 'pending' | 'approved' | 'rejected';
   crop_type: string;
   predicted_amount_mwk: number;
-  approved_amount_mwk: number;
+  approved_amount_mwk: number | null;
   farm_size_hectares: number;
+}
+
+interface DashboardStats {
+  totalApplications: number;
+  approvedAmount: number;
+  pendingApplications: number;
+  lastApplicationDate: string | null;
 }
 
 const FarmerDashboard = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'profile'>('overview');
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<DashboardStats>({
     totalApplications: 0,
     approvedAmount: 0,
     pendingApplications: 0,
-    lastApplicationDate: null as string | null,
+    lastApplicationDate: null,
   });
 
   useEffect(() => {
-    fetchApplications();
-  }, []);
+    if (user) {
+      fetchApplications();
+    }
+  }, [user]);
 
   const fetchApplications = async () => {
     try {
-      const data = await apiService.getFarmerApplications();
-      const typedData = Array.isArray(data) ? data as Application[] : [];
+      setLoading(true);
+      setError(null);
+      
+      const data = await farmersService.getFarmerApplications();
+      console.log('API Response:', data);
+
+      // Transform the data to match our interface
+      const typedData: Application[] = data.map((app: any) => ({
+        application_id: app.application_id,
+        application_date: app.application_date,
+        status: app.status,
+        crop_type: app.crop_type,
+        predicted_amount_mwk: Number(app.predicted_amount_mwk || app.predicted_amount || 0),
+        approved_amount_mwk: app.approved_amount_mwk || app.approved_amount ? 
+          Number(app.approved_amount_mwk || app.approved_amount) : null,
+        farm_size_hectares: Number(app.farm_size_hectares) || 0
+      }));
+      
       setApplications(typedData);
       
-      // Calculate stats
+      // Calculate statistics
       const totalApplications = typedData.length;
-      const approvedAmount = typedData.reduce((sum: number, app: Application) => 
-        sum + (app.approved_amount_mwk || 0), 0);
-      const pendingApplications = typedData.filter((app: Application) => 
-        app.status === 'pending').length;
+      const approvedAmount = typedData.reduce((sum, app) => sum + (app.approved_amount_mwk || 0), 0);
+      const pendingApplications = typedData.filter(app => app.status === 'pending').length;
       const lastApplicationDate = typedData[0]?.application_date || null;
       
       setStats({
@@ -56,37 +80,41 @@ const FarmerDashboard = () => {
         pendingApplications,
         lastApplicationDate,
       });
-    } catch (error) {
-      console.error('Failed to fetch applications:', error);
+    } catch (err) {
+      console.error('Failed to fetch applications:', err);
+      setError('Failed to load applications. Please try again later.');
       toast({
         title: "Error",
-        description: "Failed to load applications",
+        description: "Could not fetch your applications",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   };
-
+  
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'approved':
-        return 'bg-green-100 text-green-800';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'rejected':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+      case 'approved': return 'bg-green-100 text-green-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'rejected': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | null | undefined) => {
+    // Handle null/undefined cases
+    if (amount === null || amount === undefined || isNaN(amount)) {
+      return 'MWK 0';
+    }
+    
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'MWK',
       minimumFractionDigits: 0,
-    }).format(amount);
+      maximumFractionDigits: 0,
+      currencyDisplay: 'narrowSymbol'
+    }).format(amount).replace('MWK', 'MWK ');
   };
 
   const formatDate = (dateString: string) => {
@@ -108,6 +136,15 @@ const FarmerDashboard = () => {
             </GlassCard>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 text-center">
+        <div className="text-red-500 mb-4">{error}</div>
+        <Button onClick={fetchApplications}>Retry</Button>
       </div>
     );
   }
@@ -240,7 +277,7 @@ const FarmerDashboard = () => {
               <div className="space-y-4">
                 {applications.slice(0, 5).map((application) => (
                   <div
-                    key={application.application_id}
+                    key={`application-${application.application_id}`}
                     className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
                     onClick={() => navigate(`/farmer/applications/${application.application_id}`)}
                   >
@@ -268,7 +305,6 @@ const FarmerDashboard = () => {
           </GlassCard>
         </>
       ) : (
-        /* Profile Tab */
         <FarmerProfile />
       )}
     </div>

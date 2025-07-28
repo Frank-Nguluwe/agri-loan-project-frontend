@@ -1,27 +1,31 @@
-
 import { BaseApiService } from './base';
+import { Application, FarmerProfile, YieldHistory } from './types';
 
-class FarmersService extends BaseApiService {
-  async submitApplication(data: any) {
+export class FarmersService extends BaseApiService {
+  constructor() {
+    super('/api'); 
+  }
+
+  async submitApplication(data: any): Promise<Application> {
     return this.makeRequest('/farmers/applications', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async getFarmerApplications() {
+  async getFarmerApplications(): Promise<Application[]> {
     return this.makeRequest('/farmers/applications');
   }
 
-  async getApplicationDetails(applicationId: string) {
+  async getApplicationDetails(applicationId: string): Promise<Application> {
     return this.makeRequest(`/farmers/applications/${applicationId}`);
   }
 
-  async getFarmerProfile() {
+  async getFarmerProfile(): Promise<FarmerProfile> {
     return this.makeRequest('/farmers/profile');
   }
 
-  async getYieldHistory() {
+  async getYieldHistory(): Promise<YieldHistory[]> {
     return this.makeRequest('/farmers/yield-history');
   }
 }

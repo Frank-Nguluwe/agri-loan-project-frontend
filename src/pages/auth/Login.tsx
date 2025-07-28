@@ -1,6 +1,5 @@
-// src/pages/auth/Login.tsx
 import React, { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
@@ -9,10 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { UserRole } from "@/lib/api/auth";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login, user } = useAuth();
+  const location = useLocation();
+  const { login, isAuthenticated } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -22,8 +23,16 @@ const Login = () => {
     email: "",
     phone_number: "",
     password: "",
-    loginMethod: "email", // or 'phone'
+    loginMethod: "email",
   });
+
+  const from = location.state?.from?.pathname || '/dashboard';
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, navigate, from]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -33,35 +42,20 @@ const Login = () => {
     setError("");
   };
 
-  const redirectByRole = (role: string) => {
-    const normalizedRole = role.toLowerCase().trim();
-
-    switch (normalizedRole) {
-      case "admin":
-        navigate("/dashboard/admin");
-        break;
-      case "loan_officer":
-        navigate("/dashboard/loan-officer");
-        break;
-      case "supervisor":
-        navigate("/dashboard/supervisor");
-        break;
-      case "farmer":
-        navigate("/dashboard/farmer");
-        break;
-      default:
-        navigate("/dashboard");
+  const getDashboardPath = (role: UserRole): string => {
+    switch (role) {
+      case 'admin': return '/dashboard/admin';
+      case 'loan_officer': return '/dashboard/loan-officer';
+      case 'supervisor': return '/dashboard/supervisor';
+      case 'farmer': return '/dashboard/farmer';
+      default: return '/dashboard';
     }
   };
 
-  useEffect(() => {
-    if (user?.role) {
-      redirectByRole(user.role);
-    }
-  }, [user?.role]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+    
     setLoading(true);
     setError("");
 
@@ -73,15 +67,13 @@ const Login = () => {
           : { phone_number: formData.phone_number }),
       };
 
-      await login(credentials);
-
+      const user = await login(credentials);
+      navigate(getDashboardPath(user.role), { replace: true });
+      
       toast({
         title: "Login Successful",
         description: "Welcome back to the Loan Management System",
       });
-
-      // No redirect here - handled by useEffect above
-
     } catch (error: any) {
       setError(error.message || "Login failed. Please check your credentials.");
       toast({
@@ -110,7 +102,6 @@ const Login = () => {
 
         <GlassCard className="p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Login Method Toggle */}
             <div className="flex space-x-2 bg-gray-50 p-1 rounded-md">
               <button
                 type="button"
@@ -140,12 +131,9 @@ const Login = () => {
               </button>
             </div>
 
-            {/* Email or Phone Input */}
             <div>
               <Label htmlFor={formData.loginMethod}>
-                {formData.loginMethod === "email"
-                  ? "Email Address"
-                  : "Phone Number"}
+                {formData.loginMethod === "email" ? "Email Address" : "Phone Number"}
               </Label>
               <Input
                 id={formData.loginMethod}
@@ -167,7 +155,6 @@ const Login = () => {
               />
             </div>
 
-            {/* Password Input */}
             <div>
               <Label htmlFor="password">Password</Label>
               <div className="mt-1 relative">
@@ -194,14 +181,12 @@ const Login = () => {
               </div>
             </div>
 
-            {/* Error Alert */}
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
 
-            {/* Submit Button */}
             <Button
               type="submit"
               className="w-full bg-[#2ACB25] hover:bg-[#1E9B1A] text-white"
@@ -210,7 +195,6 @@ const Login = () => {
               {loading ? "Signing In..." : "Sign In"}
             </Button>
 
-            {/* Additional Links */}
             <div className="flex flex-col space-y-2 text-center text-sm">
               <Link
                 to="/auth/forgot-password"
@@ -219,7 +203,7 @@ const Login = () => {
                 Forgot your password?
               </Link>
               <div className="text-gray-600">
-                Don&apos;t have an account?{" "}
+                Don't have an account?{" "}
                 <Link
                   to="/auth/signup"
                   className="text-[#2ACB25] hover:text-[#1E9B1A] font-medium"
