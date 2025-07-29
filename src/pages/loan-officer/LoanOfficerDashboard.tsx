@@ -1,12 +1,24 @@
-
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Users, MapPin, TrendingUp, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { FileText, Users, MapPin, TrendingUp, CheckCircle, XCircle, Clock, X } from 'lucide-react';
 import { apiService } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+
+// Utility function for currency formatting
+const formatCurrency = (amount: number, currency: string = 'MWK'): string => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
 
 interface DashboardStats {
   totalApplications: number;
@@ -18,19 +30,174 @@ interface DashboardStats {
 interface Application {
   application_id: string;
   farmer_name: string;
-  crop_type: string;
-  district_name: string;
-  requested_amount: number;
-  status: string;
   application_date: string;
+  predicted_amount_mwk: number;
+  status: string;
+  crop_type: string;
   farm_size_hectares: number;
-  farmer_phone: string;
+  district_name: string;
+  expected_yield_kg: number;
+  expected_revenue_mwk: number;
 }
+
+interface ApplicationDetails extends Application {
+  prediction_details: {
+    predicted_amount_mwk: number;
+    prediction_confidence: number;
+    prediction_date: string;
+    model_version: string;
+  };
+  farmer_profile: {
+    user_id: string;
+    email: string;
+    phone_number: string;
+    first_name: string;
+    last_name: string;
+    date_of_birth: string;
+    national_id: string;
+    address: string;
+    farm_location_gps: string;
+    farm_size_hectares: number;
+    registration_date: string;
+    district_name: string;
+  };
+  yield_history: Array<{
+    year: number;
+    crop_type: string;
+    yield_amount_kg: number;
+    revenue_mwk: number;
+  }>;
+  review_history: Array<{
+    reviewer_name: string;
+    review_date: string;
+    comments: string;
+    action: string;
+  }>;
+  approved_amount_mwk: number;
+  approval_date: string;
+  approver_name: string;
+  override_reason: string;
+}
+
+interface District {
+  id: string;
+  name: string;
+}
+
+interface User {
+  // Add other user properties as needed
+  district?: District;
+}
+
+const ApplicationDetailsModal = ({
+  application,
+  onClose,
+  onApprove,
+  onReject,
+}: {
+  application: ApplicationDetails;
+  onClose: () => void;
+  onApprove: (amount: number, notes: string) => void;
+  onReject: (notes: string) => void;
+}) => {
+  const [notes, setNotes] = useState('');
+  const [approvedAmount, setApprovedAmount] = useState(application.predicted_amount_mwk);
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <GlassCard className="p-6 max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-start mb-6">
+          <h2 className="text-2xl font-bold">
+            Application: {application.farmer_profile.first_name}{' '}
+            {application.farmer_profile.last_name}
+          </h2>
+          <Button variant="ghost" onClick={onClose}>
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div>
+            <h3 className="font-semibold mb-2">Farmer Details</h3>
+            <p>Phone: {application.farmer_profile.phone_number}</p>
+            <p>Email: {application.farmer_profile.email}</p>
+            <p>National ID: {application.farmer_profile.national_id}</p>
+            <p>Farm Location: {application.farmer_profile.farm_location_gps}</p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold mb-2">Application Details</h3>
+            <p>Crop: {application.crop_type}</p>
+            <p>Farm Size: {application.farm_size_hectares} hectares</p>
+            <p>District: {application.district_name}</p>
+            <p>
+              Predicted Amount: {formatCurrency(application.predicted_amount_mwk)}
+            </p>
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <h3 className="font-semibold mb-2">Yield History</h3>
+          {application.yield_history.length > 0 ? (
+            <div className="space-y-2">
+              {application.yield_history.map((yieldItem, index) => (
+                <div key={index} className="border p-2 rounded">
+                  <p>Year: {yieldItem.year}</p>
+                  <p>Yield: {yieldItem.yield_amount_kg} kg</p>
+                  <p>Revenue: {formatCurrency(yieldItem.revenue_mwk)}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p>No yield history available</p>
+          )}
+        </div>
+
+        <div className="mb-6">
+          <h3 className="font-semibold mb-2">Review Notes</h3>
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Enter your review notes..."
+          />
+        </div>
+
+        {application.status === 'pending' && (
+          <div className="flex justify-between">
+            <div>
+              <Label>Approved Amount (MWK)</Label>
+              <Input
+                type="number"
+                value={approvedAmount}
+                onChange={(e) => setApprovedAmount(Number(e.target.value))}
+                min={0}
+              />
+            </div>
+            <div className="flex space-x-2">
+              <Button
+                variant="destructive"
+                onClick={() => onReject(notes)}
+              >
+                Reject Application
+              </Button>
+              <Button
+                onClick={() => onApprove(approvedAmount, notes)}
+              >
+                Approve Application
+              </Button>
+            </div>
+          </div>
+        )}
+      </GlassCard>
+    </div>
+  );
+};
 
 const LoanOfficerDashboard = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [applications, setApplications] = useState<Application[]>([]);
+  const [selectedApplication, setSelectedApplication] = useState<ApplicationDetails | null>(null);
   const [stats, setStats] = useState<DashboardStats>({
     totalApplications: 0,
     pendingReviews: 0,
@@ -46,11 +213,11 @@ const LoanOfficerDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       const data = await apiService.getLoanOfficerDashboardStats();
-      setStats((data as DashboardStats) || {
-        totalApplications: 0,
-        pendingReviews: 0,
-        approvedApplications: 0,
-        totalAmountProcessed: 0,
+      setStats({
+        totalApplications: data.total_applications || 0,
+        pendingReviews: data.pending_reviews || 0,
+        approvedApplications: data.approved_applications || 0,
+        totalAmountProcessed: data.total_amount_processed || 0,
       });
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
@@ -78,11 +245,31 @@ const LoanOfficerDashboard = () => {
     }
   };
 
-  const handleUpdateApplicationStatus = async (applicationId: string, status: 'approved' | 'rejected', notes: string = '') => {
+  const fetchApplicationDetails = async (applicationId: string) => {
+    try {
+      const details = await apiService.getApplicationDetails(applicationId);
+      setSelectedApplication(details);
+    } catch (error) {
+      console.error('Failed to fetch application details:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load application details",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleUpdateApplicationStatus = async (
+    applicationId: string,
+    status: 'approved' | 'rejected',
+    notes: string = '',
+    approvedAmount?: number
+  ) => {
     try {
       await apiService.approveRejectApplication(applicationId, {
         status,
-        loan_officer_notes: notes || `${status} by loan officer`
+        loan_officer_notes: notes,
+        ...(status === 'approved' && { approved_amount: approvedAmount }),
       });
       
       toast({
@@ -92,6 +279,7 @@ const LoanOfficerDashboard = () => {
       
       fetchApplications();
       fetchDashboardData();
+      setSelectedApplication(null);
     } catch (error) {
       console.error(`Failed to ${status} application:`, error);
       toast({
@@ -117,14 +305,6 @@ const LoanOfficerDashboard = () => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'MWK',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -148,7 +328,9 @@ const LoanOfficerDashboard = () => {
     );
   }
 
-  const pendingApplications = applications.filter(app => app.status === 'pending' || app.status === 'under_review');
+  const pendingApplications = applications.filter(app => 
+    app.status === 'pending' || app.status === 'under_review'
+  );
 
   return (
     <div className="space-y-6">
@@ -210,7 +392,9 @@ const LoanOfficerDashboard = () => {
         <GlassCard className="p-4">
           <div className="flex items-center">
             <MapPin className="h-5 w-5 text-[#2ACB25] mr-2" />
-            <span className="font-medium text-gray-900">Assigned District: {user.district}</span>
+            <span className="font-medium text-gray-900">
+              Assigned District: {user.district.name}
+            </span>
           </div>
         </GlassCard>
       )}
@@ -243,12 +427,9 @@ const LoanOfficerDashboard = () => {
                       <MapPin className="h-4 w-4 mr-1" />
                       {application.district_name} • {application.crop_type} • {application.farm_size_hectares} hectares
                     </p>
-                    {application.farmer_phone && (
-                      <p className="text-sm text-gray-500">Phone: {application.farmer_phone}</p>
-                    )}
                   </div>
                   <div className="text-right">
-                    <p className="font-medium text-gray-900">{formatCurrency(application.requested_amount)}</p>
+                    <p className="font-medium text-gray-900">{formatCurrency(application.predicted_amount_mwk)}</p>
                     <Badge className={getStatusColor(application.status)}>
                       {application.status.replace('_', ' ')}
                     </Badge>
@@ -261,19 +442,10 @@ const LoanOfficerDashboard = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleUpdateApplicationStatus(application.application_id, 'rejected')}
-                      className="text-red-600 hover:bg-red-50"
+                      onClick={() => fetchApplicationDetails(application.application_id)}
+                      className="text-blue-600 hover:bg-blue-50"
                     >
-                      <XCircle className="h-4 w-4 mr-1" />
-                      Reject
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handleUpdateApplicationStatus(application.application_id, 'approved')}
-                      className="bg-[#2ACB25] hover:bg-[#1E9B1A] text-white"
-                    >
-                      <CheckCircle className="h-4 w-4 mr-1" />
-                      Approve
+                      View Details
                     </Button>
                   </div>
                 </div>
@@ -307,7 +479,7 @@ const LoanOfficerDashboard = () => {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-medium text-gray-900">{formatCurrency(application.requested_amount)}</p>
+                  <p className="font-medium text-gray-900">{formatCurrency(application.predicted_amount_mwk)}</p>
                   <p className="text-sm text-gray-600">{application.farm_size_hectares} hectares</p>
                 </div>
               </div>
@@ -315,6 +487,29 @@ const LoanOfficerDashboard = () => {
           </div>
         )}
       </GlassCard>
+
+      {/* Application Details Modal */}
+      {selectedApplication && (
+        <ApplicationDetailsModal
+          application={selectedApplication}
+          onClose={() => setSelectedApplication(null)}
+          onApprove={(amount, notes) => 
+            handleUpdateApplicationStatus(
+              selectedApplication.application_id,
+              'approved',
+              notes,
+              amount
+            )
+          }
+          onReject={(notes) => 
+            handleUpdateApplicationStatus(
+              selectedApplication.application_id,
+              'rejected',
+              notes
+            )
+          }
+        />
+      )}
     </div>
   );
 };

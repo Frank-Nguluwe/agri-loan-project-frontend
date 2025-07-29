@@ -8,10 +8,12 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = 'ApiError';
+    Object.setPrototypeOf(this, ApiError.prototype);
   }
 }
 
 export class BaseApiService {
+  protected token: string | null = null;
   protected baseUrl: string;
 
   constructor(basePath: string = '') {
@@ -28,7 +30,7 @@ export class BaseApiService {
       ...(options.headers || {}),
     };
 
-    const token = localStorage.getItem('access_token');
+    const token = this.getToken();
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -40,10 +42,23 @@ export class BaseApiService {
         credentials: 'include',
       });
 
+      if (response.status === 401) {
+        this.clearToken();
+
+        toast({
+          title: 'Session Expired',
+          description: 'Please log in again.',
+          variant: 'destructive',
+        });
+
+        // IMPORTANT: Do NOT reload the page here!
+        throw new ApiError(401, 'Not authenticated');
+      }
+
       if (!response.ok) {
         const errorData = await this.parseError(response);
         console.error('[API Error]', response.status, errorData);
-        
+
         toast({
           title: `API Error (${response.status})`,
           description: errorData.message || response.statusText,
@@ -64,27 +79,80 @@ export class BaseApiService {
       }
 
       console.error('[Network Error]', error);
+
       toast({
         title: 'Network Error',
-        description: 'Failed to connect to the server',
+        description: 'Failed to connect to the server. Please check your connection.',
         variant: 'destructive',
       });
-      throw new ApiError(0, 'Network request failed');
+
+      throw new ApiError(
+        0,
+        'Network request failed',
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
     }
   }
 
   private async parseResponse<T>(response: Response): Promise<T> {
     const contentType = response.headers.get('content-type');
-    return contentType?.includes('application/json') 
-      ? response.json() 
-      : response.text() as unknown as T;
+    if (contentType?.includes('application/json')) {
+      return response.json();
+    }
+    return response.text() as unknown as T;
   }
 
-  private async parseError(response: Response): Promise<any> {
+  private async parseError(response: Response): Promise<{ message?: string; [key: string]: any }> {
     try {
       return await response.json();
     } catch {
       return { message: response.statusText };
     }
+  }
+
+  protected setToken(token: string): void {
+    this.token = token;
+    localStorage.setItem('access_token', token);
+  }
+
+  public getToken(): string | null {
+    if (this.token) return this.token;
+    const token = localStorage.getItem('access_token');
+    this.token = token;
+    return token;
+  }
+
+  public clearToken(): void {
+    this.token = null;
+    localStorage.removeItem('access_token');
+  }
+
+  protected async get<T>(endpoint: string): Promise<T> {
+    return this.makeRequest<T>(endpoint, { method: 'GET' });
+  }
+
+  protected async post<T>(endpoint: string, body: any): Promise<T> {
+    return this.makeRequest<T>(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  protected async put<T>(endpoint: string, body: any): Promise<T> {
+    return this.makeRequest<T>(endpoint, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  }
+
+  protected async patch<T>(endpoint: string, body: any): Promise<T> {
+    return this.makeRequest<T>(endpoint, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  }
+
+  protected async delete<T>(endpoint: string): Promise<T> {
+    return this.makeRequest<T>(endpoint, { method: 'DELETE' });
   }
 }
