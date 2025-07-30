@@ -45,7 +45,7 @@ class ApiService {
   getFarmerPredictionHistory = predictionsService.getFarmerPredictionHistory.bind(predictionsService);
 
   // Districts methods
-  getAllDistricts = districtsService.getAllDistricts.bind(districtsService);
+  getAllDistricts = districtsService.getDistricts.bind(districtsService);
   getDistrictById = districtsService.getDistrictById.bind(districtsService);
 
   // Monitoring methods

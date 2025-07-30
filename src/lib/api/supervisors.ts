@@ -35,6 +35,10 @@ export interface PendingApplication {
 }
 
 class SupervisorsService extends BaseApiService {
+    constructor() {
+    super('/api');
+  }
+  
   async getSupervisorDashboard(): Promise<SupervisorDashboardResponse> {
     return this.makeRequest('/supervisors/dashboard');
   }

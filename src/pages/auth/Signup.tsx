@@ -41,7 +41,7 @@ const Signup = () => {
   useEffect(() => {
     const fetchDistricts = async () => {
       try {
-        const districtsData = await districtsService.getAllDistricts();
+        const districtsData = await districtsService.getDistricts();
         setDistricts(districtsData);
       } catch (error) {
         toast({

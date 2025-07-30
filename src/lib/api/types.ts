@@ -28,3 +28,8 @@ export interface YieldHistory {
   yield_amount: number;
   unit: string;
 }
+
+export type CropType = {
+  id: string;
+  name: string;
+};

@@ -1,90 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { Button } from '@/components/ui/button';
-import { CreateUserModal } from '@/components/admin/CreateUserModal';
-import { UserManagementTable } from '@/components/admin/UserManagementTable';
-import { SystemSettingsModal } from '@/components/admin/SystemSettingsModal';
-import { ModelPerformanceModal } from '@/components/admin/ModelPerformanceModal';
-import { ModelManagementModal } from '@/components/admin/ModelManagementModal';
-import { DistrictSelect } from '@/components/ui/district-select';
-import { Users, TrendingUp, Activity, Database, MapPin } from 'lucide-react';
-import apiService from '@/lib/api';
+import { Users, TrendingUp, Activity, MapPin } from 'lucide-react';
+import { adminService, ListUser, ModelPerformance } from '@/lib/api/admin';
 import { toast } from '@/hooks/use-toast';
-
-const getCurrentUserRole = () => {
-  return localStorage.getItem('userRole') || 'admin';
-};
-
-interface ModelPerformance {
-  accuracy: number;
-  recent_predictions: any[];
-  drift_metrics: any;
-}
+import CreateUserModal from '@/components/admin/CreateUserModal';
 
 const AdminDashboard = () => {
-  console.log('AdminDashboard - Component rendering');
-
   const [loading, setLoading] = useState(true);
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<ListUser[]>([]);
   const [modelPerformance, setModelPerformance] = useState<ModelPerformance>({
     accuracy: 0,
     recent_predictions: [],
     drift_metrics: {},
   });
   const [selectedDistrict, setSelectedDistrict] = useState<string>('');
-  const [pendingApplications, setPendingApplications] = useState<any[]>([]);
-
-  const userRole = getCurrentUserRole();
 
   useEffect(() => {
-    console.log('AdminDashboard - useEffect triggered, fetching data');
     fetchDashboardData();
   }, []);
 
   const fetchDashboardData = async () => {
-    console.log('AdminDashboard - fetchDashboardData started');
     try {
-      const usersPromise = apiService.getUsers().catch(err => {
-        console.error('Failed to fetch users:', err);
-        return [];
-      });
-
-      const performancePromise = apiService.getModelPerformance().catch(err => {
-        console.error('Failed to fetch model performance:', err);
-        return { accuracy: 0, recent_predictions: [], drift_metrics: {} };
-      });
-
-      const pendingPromise =
-        userRole === 'supervisor'
-          ? apiService.getPendingPredictionApplications().catch(err => {
-              console.error('Failed to fetch pending applications:', err);
-              return [];
-            })
-          : Promise.resolve([]); 
-
-      const [usersData, performanceData, pendingData] = await Promise.all([
-        usersPromise,
-        performancePromise,
-        pendingPromise,
+      setLoading(true);
+      
+      const [usersData, performanceData] = await Promise.all([
+        adminService.getUsers(),
+        adminService.getModelPerformance()
       ]);
 
-      console.log('AdminDashboard - Data fetched:', {
-        usersData,
-        performanceData,
-        pendingData,
-      });
-
-      setUsers(Array.isArray(usersData) ? usersData : []);
-      setModelPerformance(
-        (performanceData as ModelPerformance) || {
-          accuracy: 0,
-          recent_predictions: [],
-          drift_metrics: {},
-        }
-      );
-      setPendingApplications(Array.isArray(pendingData) ? pendingData : []);
+      setUsers(usersData);
+      setModelPerformance(performanceData);
     } catch (error) {
-      console.error('AdminDashboard - Failed to fetch dashboard data:', error);
+      console.error('Failed to fetch dashboard data:', error);
       toast({
         title: 'Error',
         description: 'Failed to load dashboard data',
@@ -92,35 +40,30 @@ const AdminDashboard = () => {
       });
     } finally {
       setLoading(false);
-      console.log('AdminDashboard - Data fetching completed');
     }
   };
 
-  const handleProcessPendingBatch = async () => {
+  const handleUserStatusChange = async (userId: string, isActive: boolean) => {
     try {
-      setLoading(true);
-      await apiService.processPendingBatch();
+      await adminService.updateUser(userId, { is_active: isActive });
       toast({
         title: 'Success',
-        description: 'Pending applications processed successfully',
+        description: `User ${isActive ? 'activated' : 'deactivated'} successfully`,
       });
       fetchDashboardData();
     } catch (error) {
-      console.error('Failed to process pending batch:', error);
+      console.error('Failed to update user status:', error);
       toast({
         title: 'Error',
-        description: 'Failed to process pending applications',
+        description: 'Failed to update user status',
         variant: 'destructive',
       });
-    } finally {
-      setLoading(false);
     }
   };
 
-  console.log('AdminDashboard - Render state:', {
-    loading,
-    usersCount: users.length,
-  });
+  const filteredUsers = selectedDistrict
+    ? users.filter(user => user.district === selectedDistrict)
+    : users;
 
   if (loading) {
     return (
@@ -146,11 +89,16 @@ const AdminDashboard = () => {
             <MapPin className="h-5 w-5 text-gray-600" />
             <span className="font-medium text-gray-900">Filter by District:</span>
             <div className="w-64">
-              <DistrictSelect
+              <select
                 value={selectedDistrict}
-                onValueChange={setSelectedDistrict}
-                placeholder="All Districts"
-              />
+                onChange={(e) => setSelectedDistrict(e.target.value)}
+                className="w-full p-2 border rounded"
+              >
+                <option value="">All Districts</option>
+                {Array.from(new Set(users.map(user => user.district))).map(district => (
+                  <option key={district} value={district}>{district}</option>
+                ))}
+              </select>
             </div>
           </div>
           <div className="text-sm text-gray-600">
@@ -200,48 +148,52 @@ const AdminDashboard = () => {
             </div>
           </div>
         </GlassCard>
-
-        <GlassCard className="p-6">
-          <div className="flex items-center">
-            <div className="bg-purple-100 rounded-full p-3 mr-4">
-              <Database className="h-6 w-6 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Pending Applications</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {pendingApplications.length}
-              </p>
-            </div>
-          </div>
-        </GlassCard>
       </div>
 
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-4">
         <CreateUserModal onUserCreated={fetchDashboardData} />
-        <SystemSettingsModal />
-        <ModelPerformanceModal />
-        <ModelManagementModal />
-
-        {/* Only show Process Pending if supervisor and there are pending */}
-        {userRole === 'supervisor' && pendingApplications.length > 0 && (
-          <Button
-            onClick={handleProcessPendingBatch}
-            disabled={loading}
-            className="bg-[#2ACB25] hover:bg-[#1E9B1A] text-white"
-          >
-            <Database className="h-4 w-4 mr-2" />
-            Process Pending ({pendingApplications.length})
-          </Button>
-        )}
       </div>
 
       {/* User Management Table */}
-      <UserManagementTable
-        users={users}
-        onUsersChange={fetchDashboardData}
-        selectedDistrict={selectedDistrict}
-      />
+      <GlassCard className="p-6">
+        <h2 className="text-xl font-semibold mb-4">User Management</h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">District</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredUsers.map((user) => (
+                <tr key={user.user_id}>
+                  <td className="px-6 py-4 whitespace-nowrap">{user.first_name} {user.last_name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{user.role}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{user.district}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      {user.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <button 
+                      onClick={() => handleUserStatusChange(user.user_id, !user.is_active)}
+                      className="text-blue-600 hover:text-blue-900 mr-3"
+                    >
+                      {user.is_active ? 'Deactivate' : 'Activate'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </GlassCard>
     </div>
   );
 };

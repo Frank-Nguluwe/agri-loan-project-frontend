@@ -3,24 +3,21 @@ import { BaseApiService } from './base';
 export interface District {
   id: string;
   name: string;
-  region?: string;
+  code: string;
+  region: string;
 }
 
-export class DistrictsService extends BaseApiService {
+class DistrictsService extends BaseApiService {
   constructor() {
     super('/api');
   }
 
-  async getAllDistricts(): Promise<District[]> {
-    return this.makeRequest<District[]>('/districts', {
-      method: 'GET'
-    });
+  async getDistricts(): Promise<District[]> {
+    return this.makeRequest('/districts');
   }
 
   async getDistrictById(id: string): Promise<District> {
-    return this.makeRequest<District>(`/districts/${id}`, {
-      method: 'GET'
-    });
+    return this.makeRequest(`/districts/${id}`);
   }
 }
 

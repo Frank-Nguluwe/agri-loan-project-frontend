@@ -29,9 +29,32 @@ interface Application {
   requested_amount: number | null;
   predicted_amount_mwk?: number | null;
   application_date: string;
-  farm_size_hectares: number | null;
+  farm_size_hectares?: number;
   status: string;
 }
+
+// Utility function to safely parse numbers
+const parseNumberWithFallback = (value: any, fallback = 0): number => {
+  if (value === null || value === undefined || value === "") return fallback;
+  const num = Number(String(value).replace(/[^0-9.]/g, ''));
+  return isNaN(num) ? fallback : num;
+};
+
+// Utility function to format currency
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "MWK",
+    minimumFractionDigits: 0,
+  }).format(amount);
+
+// Utility function to format dates
+const formatDate = (dateString: string) =>
+  new Date(dateString).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 
 const SupervisorDashboard = () => {
   const { user } = useAuth();
@@ -87,22 +110,24 @@ const SupervisorDashboard = () => {
   const fetchPendingApplications = async () => {
     try {
       const data: any[] = await supervisorsService.getPendingApplications();
+      console.log("Raw applications data:", data);
 
-      // Filter by user district if exists
       const filtered = user?.district_id
         ? data.filter((app) => String(app.district_id) === String(user.district_id))
         : data;
 
-      // Process raw data to ensure correct types and fallback values
       const processed: Application[] = filtered.map((app) => ({
         ...app,
-        requested_amount:
-          app.requested_amount != null
-            ? Number(app.requested_amount)
-            : app.predicted_amount_mwk != null
-            ? Number(app.predicted_amount_mwk)
-            : 0,
-        farm_size_hectares: app.farm_size_hectares != null ? Number(app.farm_size_hectares) : 0,
+        requested_amount: parseNumberWithFallback(
+          app.requested_amount ?? app.predicted_amount_mwk,
+          0
+        ),
+        farm_size_hectares: parseNumberWithFallback(
+          app.farm_size_hectares ?? app.farm_size,
+          0
+        ),
+        district_id: app.district_id || "",
+        district_name: app.district_name || "Unknown District",
         predicted_amount_mwk: app.predicted_amount_mwk ?? null,
         status: app.status || "pending",
       }));
@@ -263,12 +288,18 @@ const SupervisorDashboard = () => {
                   <div>
                     <h3 className="font-medium text-gray-900">{application.farmer_name}</h3>
                     <p className="text-sm text-gray-600">
-                      {application.crop_type} • {application.farm_size_hectares} hectares • {application.district_name}
+                      {application.crop_type} • 
+                      {application.farm_size_hectares ? ` ${application.farm_size_hectares} hectares • ` : " Size not specified • "}
+                      {application.district_name}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium text-gray-900">{formatCurrency(application.requested_amount ?? 0)}</p>
-                    <Badge className={getStatusColor(application.status)}>{application.status}</Badge>
+                    <p className="font-medium text-gray-900">
+                      {formatCurrency(application.requested_amount ?? 0)}
+                    </p>
+                    <Badge className={getStatusColor(application.status)}>
+                      {application.status}
+                    </Badge>
                   </div>
                 </div>
                 <div className="flex justify-between items-center">
