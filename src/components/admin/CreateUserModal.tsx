@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { adminService } from '@/lib/api/admin';
-import { districtsService } from '@/lib/api/districts';
+import { districtsService, District } from '@/lib/api/districts';
 import { toast } from '@/hooks/use-toast';
 
 interface CreateUserModalProps {
@@ -14,7 +14,8 @@ interface CreateUserModalProps {
 const CreateUserModal: React.FC<CreateUserModalProps> = ({ onUserCreated }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [districts, setDistricts] = useState<any[]>([]);
+  const [districtLoading, setDistrictLoading] = useState(false);
+  const [districts, setDistricts] = useState<District[]>([]);
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -32,6 +33,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ onUserCreated }) => {
   }, [open]);
 
   const fetchDistricts = async () => {
+    setDistrictLoading(true);
     try {
       const data = await districtsService.getDistricts();
       setDistricts(data);
@@ -42,6 +44,8 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ onUserCreated }) => {
         description: 'Failed to load districts',
         variant: 'destructive',
       });
+    } finally {
+      setDistrictLoading(false);
     }
   };
 
@@ -66,11 +70,20 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ onUserCreated }) => {
       });
       setOpen(false);
       onUserCreated();
-    } catch (error) {
+      setFormData({
+        first_name: '',
+        last_name: '',
+        email: '',
+        phone_number: '',
+        role: 'farmer',
+        district_id: '',
+        password: '',
+      });
+    } catch (error: any) {
       console.error('Failed to create user:', error);
       toast({
         title: 'Error',
-        description: 'Failed to create user',
+        description: error.message || 'Failed to create user',
         variant: 'destructive',
       });
     } finally {
@@ -157,9 +170,12 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ onUserCreated }) => {
                 <Select
                   value={formData.district_id}
                   onValueChange={(value) => setFormData({...formData, district_id: value})}
+                  disabled={districtLoading}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select district" />
+                    <SelectValue 
+                      placeholder={districtLoading ? "Loading districts..." : "Select district"} 
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {districts.map((district) => (
@@ -193,7 +209,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ onUserCreated }) => {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || districtLoading}
                   className="bg-[#2ACB25] hover:bg-[#1E9B1A] text-white"
                 >
                   {loading ? 'Creating...' : 'Create User'}

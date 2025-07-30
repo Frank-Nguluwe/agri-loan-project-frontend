@@ -33,6 +33,25 @@ export interface SystemSetting {
   description: string;
 }
 
+interface UserCreateData {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone_number: string;
+  role: string;
+  district_id: string;
+  password: string;
+}
+
+interface UserUpdateData {
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone_number?: string;
+  district_id?: string;
+  is_active?: boolean;
+}
+
 class AdminService extends BaseApiService {
   constructor() {
     super('/api');
@@ -49,18 +68,13 @@ class AdminService extends BaseApiService {
     });
   }
 
-  async createUser(userData: {
-    first_name: string;
-    last_name: string;
-    email: string;
-    phone_number: string;
-    role: string;
-    district_id: string;
-    password: string;
-  }): Promise<DetailedUser> {
+  async createUser(userData: UserCreateData): Promise<DetailedUser> {
     return this.makeRequest('/admin/users', {
       method: 'POST',
       body: JSON.stringify(userData),
+      headers: {
+        'X-CSRF-Protection': '1'
+      }
     });
   }
 
@@ -72,17 +86,7 @@ class AdminService extends BaseApiService {
     return this.makeRequest(`/admin/users/${userId}`);
   }
 
-  async updateUser(
-    userId: string,
-    userData: {
-      first_name?: string;
-      last_name?: string;
-      email?: string;
-      phone_number?: string;
-      district_id?: string;
-      is_active?: boolean;
-    }
-  ): Promise<DetailedUser> {
+  async updateUser(userId: string, userData: UserUpdateData): Promise<DetailedUser> {
     return this.makeRequest(`/admin/users/${userId}`, {
       method: 'PUT',
       body: JSON.stringify(userData),

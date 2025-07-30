@@ -27,6 +27,7 @@ export class BaseApiService {
     const url = `${this.baseUrl}${endpoint}`;
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
       ...(options.headers || {}),
     };
 
@@ -43,55 +44,30 @@ export class BaseApiService {
       });
 
       if (response.status === 401) {
-        this.clearToken();
-
-        toast({
-          title: 'Session Expired',
-          description: 'Please log in again.',
-          variant: 'destructive',
-        });
-
-        // IMPORTANT: Do NOT reload the page here!
+        this.handleUnauthorized();
         throw new ApiError(401, 'Not authenticated');
       }
 
       if (!response.ok) {
         const errorData = await this.parseError(response);
-        console.error('[API Error]', response.status, errorData);
-
-        toast({
-          title: `API Error (${response.status})`,
-          description: errorData.message || response.statusText,
-          variant: 'destructive',
-        });
-
-        throw new ApiError(
-          response.status,
-          errorData.message || response.statusText,
-          errorData
-        );
+        this.handleApiError(response.status, errorData);
+        throw new ApiError(response.status, errorData.message || response.statusText, errorData);
       }
 
       return await this.parseResponse<T>(response);
     } catch (error) {
-      if (error instanceof ApiError) {
-        throw error;
-      }
-
-      console.error('[Network Error]', error);
-
-      toast({
-        title: 'Network Error',
-        description: 'Failed to connect to the server. Please check your connection.',
-        variant: 'destructive',
-      });
-
-      throw new ApiError(
-        0,
-        'Network request failed',
-        { error: error instanceof Error ? error.message : 'Unknown error' }
-      );
+      this.handleNetworkError(error);
+      throw error;
     }
+  }
+
+  private handleUnauthorized() {
+    this.clearToken();
+    toast({
+      title: 'Session Expired',
+      description: 'Please log in again.',
+      variant: 'destructive',
+    });
   }
 
   private async parseResponse<T>(response: Response): Promise<T> {
@@ -110,6 +86,26 @@ export class BaseApiService {
     }
   }
 
+  private handleApiError(status: number, errorData: any) {
+    console.error('[API Error]', status, errorData);
+    toast({
+      title: `API Error (${status})`,
+      description: errorData.message || 'Request failed',
+      variant: 'destructive',
+    });
+  }
+
+  private handleNetworkError(error: unknown) {
+    if (error instanceof ApiError) return;
+    
+    console.error('[Network Error]', error);
+    toast({
+      title: 'Network Error',
+      description: 'Failed to connect to the server. Please check your connection.',
+      variant: 'destructive',
+    });
+  }
+
   protected setToken(token: string): void {
     this.token = token;
     localStorage.setItem('access_token', token);
@@ -125,34 +121,5 @@ export class BaseApiService {
   public clearToken(): void {
     this.token = null;
     localStorage.removeItem('access_token');
-  }
-
-  protected async get<T>(endpoint: string): Promise<T> {
-    return this.makeRequest<T>(endpoint, { method: 'GET' });
-  }
-
-  protected async post<T>(endpoint: string, body: any): Promise<T> {
-    return this.makeRequest<T>(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-  }
-
-  protected async put<T>(endpoint: string, body: any): Promise<T> {
-    return this.makeRequest<T>(endpoint, {
-      method: 'PUT',
-      body: JSON.stringify(body),
-    });
-  }
-
-  protected async patch<T>(endpoint: string, body: any): Promise<T> {
-    return this.makeRequest<T>(endpoint, {
-      method: 'PATCH',
-      body: JSON.stringify(body),
-    });
-  }
-
-  protected async delete<T>(endpoint: string): Promise<T> {
-    return this.makeRequest<T>(endpoint, { method: 'DELETE' });
   }
 }
