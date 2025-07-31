@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, Link, useLocation } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
@@ -8,12 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { UserRole } from "@/lib/api/auth";
 
 const Login = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -26,13 +24,11 @@ const Login = () => {
     loginMethod: "email",
   });
 
-  const from = location.state?.from?.pathname || '/dashboard';
-
   useEffect(() => {
     if (isAuthenticated) {
-      navigate(from, { replace: true });
+      navigate('/dashboard');
     }
-  }, [isAuthenticated, navigate, from]);
+  }, [isAuthenticated, navigate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -42,19 +38,9 @@ const Login = () => {
     setError("");
   };
 
-  const getDashboardPath = (role: UserRole): string => {
-    switch (role) {
-      case 'admin': return '/dashboard/admin';
-      case 'loan_officer': return '/dashboard/loan-officer';
-      case 'supervisor': return '/dashboard/supervisor';
-      case 'farmer': return '/dashboard/farmer';
-      default: return '/dashboard';
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loading) return;
+    if (loading || authLoading) return;
     
     setLoading(true);
     setError("");
@@ -67,18 +53,18 @@ const Login = () => {
           : { phone_number: formData.phone_number }),
       };
 
-      const user = await login(credentials);
-      navigate(getDashboardPath(user.role), { replace: true });
-      
+      await login(credentials);
       toast({
         title: "Login Successful",
         description: "Welcome back to the Loan Management System",
       });
+
     } catch (error: any) {
-      setError(error.message || "Login failed. Please check your credentials.");
+      const errorMessage = error.response?.data?.message || error.message || "Login failed. Please check your credentials.";
+      setError(errorMessage);
       toast({
         title: "Login Failed",
-        description: "Please check your credentials and try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
